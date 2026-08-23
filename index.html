@@ -1,151 +1,176 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Crowd Text</title>
-<style>
-  :root {
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  html, body {
-    height: 100%;
-    margin: 0;
-  }
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2.5rem;
-    min-height: 100vh;
-    padding: 2rem;
-    background: #0b0b0d;
-    color: #e8e8ea;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    text-align: center;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="keywords" content="Personal Bubble, Personal Space, Internet of Things, Orgware">
+    <meta name="author" content="Frankie Anh Le">
+    <meta name="description" content="Personal Bubble — a hybrid spatial condition situated in the blurred territory between physical and digital realms. Personal Bubble is not a fixed container, but something continuously produced through entangled relations between bodies, technologies, and their traces.">
+    <title>Personal Bubble</title>
 
-  #hover-text {
-    font-size: clamp(2rem, 6vw, 4rem);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    opacity: 0; /* JS drives this value from the live visitor count */
-    transition: opacity 0.35s ease;
-    cursor: default;
-    user-select: none;
-  }
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Unna:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">    
 
-  .meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    font-size: 0.95rem;
-    color: #8a8a92;
-  }
+    <link rel="stylesheet" href="/styling/style.css">
 
-  .meta strong {
-    color: #e8e8ea;
-    font-weight: 600;
-  }
-
-  #status {
-    font-size: 0.8rem;
-    color: #5c5c63;
-  }
-
-  .hint {
-    max-width: 32ch;
-    font-size: 0.8rem;
-    color: #4a4a50;
-    line-height: 1.5;
-  }
-</style>
 </head>
 <body>
-
-  <div id="hover-text">we are here together</div>
-
-  <div class="meta">
-    <div><strong id="visitor-count">0</strong> people here right now</div>
-    <div id="status">Connecting…</div>
-  </div>
-
-  <div class="hint">
-    Text opacity rises 10% per visitor currently on this page (capped at 100%).
-    Hover the text to see it at full opacity regardless of the count.
-  </div>
+<div>
+<span class="ctx" id="hover-text"><a href="/context/attention.html">attention</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-01.html">where the eyes rest</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-02.html">where attention gathers</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-03.html">where questions lingers</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-04.html">where the hand reaches</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-05.html">where the body learns</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-06.html">where we meet</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-07.html">where the system watches</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-08.html">where the gesture returns</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-09.html">where things move together</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-10.html">where intention loosens</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-11.html">where I change things</a></span>
+<span class="ctx" id="hover-text"><a href="/context/seg-12.html">where I lose the answer</a></span>
+</div>
 
 <script>
-  // ---- Configuration -------------------------------------------------
-  // Point this at your deployed backend's WebSocket URL.
-  // Example: 'wss://your-app-name.onrender.com'
-  const WS_URL = 'wss://personal-bubble.onrender.com';
-  // ---------------------------------------------------------------------
+let zTop = 100;
 
-  const textEl = document.getElementById('hover-text');
-  const countEl = document.getElementById('visitor-count');
-  const statusEl = document.getElementById('status');
+document.addEventListener('click', e => {
+    const link = e.target.closest('.ctx a');
+    if (!link) return;
+    e.preventDefault();                 // without JS the link still just navigates
+    openPopup(link.href, link.textContent);
+});
 
-  let currentCount = 0;
-  let hovering = false;
-  let reconnectDelay = 1000;
-  let socket;
+function openPopup(url, title) {
+    const p = document.createElement('div');
+    p.className = 'popup';
+    p.innerHTML = `
+        <div class="popup-bar">
+            <span class="popup-title"></span>
+            <button class="popup-close" aria-label="Close">&times;</button>
+        </div>
+        <iframe title="context"></iframe>`;
+        const label = p.querySelector('.popup-title');
+        const frame = p.querySelector('iframe');
 
-  function ambientOpacityPercent(count) {
-    return Math.min(count * 10, 100);
-  }
+        label.textContent = title;              // link text, shown until the page loads
+        frame.addEventListener('load', () => {
+            try {                               // contentDocument throws if cross-origin
+                label.textContent = frame.contentDocument.title || title;
+            } catch {}                          // keep the fallback
+        });
+        frame.src = url;                        // set src last, after the listener is attached
+    p.querySelector('.popup-close').onclick = () => p.remove();
 
-  function applyOpacity() {
-    const percent = hovering ? 100 : ambientOpacityPercent(currentCount);
-    textEl.style.opacity = percent / 100;
-  }
+    document.body.appendChild(p);
+    placeRandomly(p);
+    bringToFront(p);
+    makeDraggable(p);
+}
 
-  function connect() {
-    statusEl.textContent = 'Connecting…';
-    socket = new WebSocket(WS_URL);
+/* random spot, fully on screen */
+function placeRandomly(p) {
+    const pad = 12;
+    const { width, height } = p.getBoundingClientRect();
+    const maxX = Math.max(pad, innerWidth  - width  - pad);
+    const maxY = Math.max(pad, innerHeight - height - pad);
+    p.style.left = pad + Math.random() * (maxX - pad) + 'px';
+    p.style.top  = pad + Math.random() * (maxY - pad) + 'px';
+}
+
+function bringToFront(p) { p.style.zIndex = ++zTop; }
+
+function makeDraggable(p) {
+    const bar = p.querySelector('.popup-bar');
+
+    p.addEventListener('pointerdown', () => bringToFront(p));
+
+    bar.addEventListener('pointerdown', e => {
+        if (e.target.closest('.popup-close')) return;
+        const box = p.getBoundingClientRect();
+        const dx = e.clientX - box.left;
+        const dy = e.clientY - box.top;
+
+        bar.setPointerCapture(e.pointerId);   // keeps events coming even over the iframe
+        p.classList.add('dragging');
+        bar.classList.add('dragging');
+
+        const move = ev => {
+            const x = clamp(ev.clientX - dx, 0, innerWidth  - box.width);
+            const y = clamp(ev.clientY - dy, 0, innerHeight - box.height);
+            p.style.left = x + 'px';
+            p.style.top  = y + 'px';
+        };
+        const up = () => {
+            bar.removeEventListener('pointermove', move);
+            bar.removeEventListener('pointerup', up);
+            p.classList.remove('dragging');
+            bar.classList.remove('dragging');
+        };
+        bar.addEventListener('pointermove', move);
+        bar.addEventListener('pointerup', up);
+    });
+}
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
+// ---- Configuration ---------------------------------------------
+const WS_URL = 'wss://personal-bubble.onrender.com';
+// ------------------------------------------------------------------
+
+function getSessionId() {
+    let id = sessionStorage.getItem('presenceSessionId');
+    if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+        sessionStorage.setItem('presenceSessionId', id);
+    }
+    return id;
+}
+
+let reconnectDelay = 1000;
+let socket;
+
+function ambientOpacityPercent(count) {
+    return Math.min(Math.max(count - 1, 0) * 10, 100);
+}
+
+function setAmbientOpacity(count) {
+    const percent = ambientOpacityPercent(count);
+    document.documentElement.style.setProperty('--ambient-opacity', percent / 100);
+}
+
+function connectPresence() {
+    socket = new WebSocket(`${WS_URL}?sid=${encodeURIComponent(getSessionId())}`);
 
     socket.addEventListener('open', () => {
-      statusEl.textContent = 'Live';
-      reconnectDelay = 1000;
+        reconnectDelay = 1000;
     });
 
     socket.addEventListener('message', (event) => {
-      let data;
-      try {
-        data = JSON.parse(event.data);
-      } catch (err) {
-        return;
-      }
-      if (data.type === 'count') {
-        currentCount = data.count;
-        countEl.textContent = currentCount;
-        applyOpacity();
-      }
+        let data;
+        try {
+            data = JSON.parse(event.data);
+        } catch (err) {
+            return;
+        }
+        if (data.type === 'count') {
+            setAmbientOpacity(data.count);
+        }
     });
 
     socket.addEventListener('close', () => {
-      statusEl.textContent = 'Reconnecting… (a free backend can take ~1 min to wake up)';
-      setTimeout(connect, reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+        setTimeout(connectPresence, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
     });
 
     socket.addEventListener('error', () => {
-      socket.close();
+        socket.close();
     });
-  }
+}
 
-  textEl.addEventListener('mouseenter', () => {
-    hovering = true;
-    applyOpacity();
-  });
-  textEl.addEventListener('mouseleave', () => {
-    hovering = false;
-    applyOpacity();
-  });
+connectPresence();
 
-  connect();
 </script>
 </body>
 </html>
