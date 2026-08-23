@@ -1,8 +1,4 @@
-// Minimal WebSocket server that tracks how many browser tabs are
-// currently connected and broadcasts that count to everyone, live.
-//
-// Run locally:   npm install && npm start
-// Deploy: see the deployment guide that came with this project.
+
 
 const http = require('http');
 const WebSocket = require('ws');
@@ -10,8 +6,7 @@ const WebSocket = require('ws');
 const PORT = process.env.PORT || 3000;
 const HEARTBEAT_INTERVAL_MS = 30000; // how often we check for dead connections
 
-// A plain HTTP server so the host has something to health-check,
-// and so we have something to attach the WebSocket server to.
+// A plain HTTP server so the host has something to health-check
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Presence WebSocket server is running.\n');
@@ -19,8 +14,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+// sid -> Set of open ws connections sharing that sid
+const sessionConnections = new Map();
+
 function broadcastCount() {
-  const count = wss.clients.size;
+  const count = sessionConnections.size;
   const payload = JSON.stringify({ type: 'count', count });
 
   wss.clients.forEach((client) => {
@@ -29,20 +27,47 @@ function broadcastCount() {
     }
   });
 
-  console.log(`[${new Date().toISOString()}] visitors: ${count}`);
+  console.log(`[${new Date().toISOString()}] distinct tabs: ${count} (raw connections: ${wss.clients.size})`);
 }
 
-wss.on('connection', (ws) => {
+function getSid(req) {
+  try {
+    const { searchParams } = new URL(req.url, 'http://placeholder');
+    const sid = searchParams.get('sid');
+    if (sid) return sid.slice(0, 100); // basic length guard
+  } catch (err) {
+    // fall through to the anonymous fallback below
+  }
+  // uncoordinated visitor rather than crashing.
+  return `anon-${Math.random().toString(36).slice(2)}`;
+}
+
+wss.on('connection', (ws, req) => {
+  const sid = getSid(req);
+  ws.sid = sid;
+
+  if (!sessionConnections.has(sid)) {
+    sessionConnections.set(sid, new Set());
+  }
+  sessionConnections.get(sid).add(ws);
+
   ws.isAlive = true;
   ws.on('pong', () => {
     ws.isAlive = true;
   });
 
-  // A new tab joined -> everyone's count goes up by one.
+  // A new tab (or its first connection) joined -> broadcast the new count.
   broadcastCount();
 
   ws.on('close', () => {
-    // A tab closed / lost connection -> everyone's count goes down by one.
+    const set = sessionConnections.get(sid);
+    if (set) {
+      set.delete(ws);
+      if (set.size === 0) {
+        sessionConnections.delete(sid);
+      }
+    }
+    // A tab's last connection closed / lost connection -> broadcast.
     broadcastCount();
   });
 
@@ -51,8 +76,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Browsers don't always send a clean "close" frame (phone locks, WiFi drops,
-// laptop lids closing, etc). This periodic ping/pong check finds and drops
+// ping/pong check finds and drops
 // connections that have gone silent, so the count stays accurate.
 const heartbeat = setInterval(() => {
   wss.clients.forEach((ws) => {
