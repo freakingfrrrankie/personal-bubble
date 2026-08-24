@@ -115,10 +115,28 @@ function makeDraggable(p) {
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-// ---- Configuration ---------------------------------------------
-const WS_URL = 'wss://personal-bubble.onrender.com';
-// ------------------------------------------------------------------
+/* ---- live visitor count -> ambient opacity -------------------------
+   Connects to the same backend as attention.html. Each additional
+   visitor (beyond yourself) raises the .ctx links' resting opacity --
+   but not by the same fixed 10% for every link. Each link gets its own
+   random share (0-10%) of that visitor's contribution, so e.g. going
+   from 1 to 2 visitors might lift one link's opacity by 8%, another by
+   0%, and another by the full 10% -- while the group still trends
+   brighter as more people join, and caps at 100% each. Hovering a link
+   always shows it at full opacity regardless (see .ctx:hover above) --
+   this only controls the non-hovered resting state.
 
+   Each link's per-visitor contributions are cached the first time
+   they're needed, so re-displaying the same count always reproduces
+   the same opacities (no flicker), while a fresh page load reshuffles
+   all of them. */
+
+
+const WS_URL = 'wss://personal-bubble.onrender.com';
+
+// One random ID per browser tab, shared with any same-origin popup
+// (attention.html) via sessionStorage, so the server can tell that a
+// tab plus its own popups are one visitor, not several.
 function getSessionId() {
     let id = sessionStorage.getItem('presenceSessionId');
     if (!id) {
@@ -131,13 +149,36 @@ function getSessionId() {
 let reconnectDelay = 1000;
 let socket;
 
-function ambientOpacityPercent(count) {
-    return Math.min(Math.max(count - 1, 0) * 10, 100);
+const ctxSpans = Array.from(document.querySelectorAll('.ctx'));
+
+// One cache of per-visitor random contributions (0-10) per link,
+// filled in lazily and reused so the same count always reproduces the
+// same opacities.
+const spanStepCache = ctxSpans.map(() => []);
+
+function stepFor(spanIndex, step) {
+    const cache = spanStepCache[spanIndex];
+    while (cache.length < step) {
+        cache.push(Math.random() * 10); // this link's share (0-10) of one visitor's contribution
+    }
+    return cache[step - 1];
+}
+
+function ambientOpacityPercentForSpan(spanIndex, count) {
+    const steps = Math.max(count - 1, 0);
+    let total = 0;
+    for (let step = 1; step <= steps; step++) {
+        total += stepFor(spanIndex, step);
+        if (total >= 100) return 100;
+    }
+    return Math.min(total, 100);
 }
 
 function setAmbientOpacity(count) {
-    const percent = ambientOpacityPercent(count);
-    document.documentElement.style.setProperty('--ambient-opacity', percent / 100);
+    ctxSpans.forEach((span, i) => {
+        const percent = ambientOpacityPercentForSpan(i, count);
+        span.style.setProperty('--ambient-opacity', percent / 100);
+    });
 }
 
 function connectPresence() {
