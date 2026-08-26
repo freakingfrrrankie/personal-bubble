@@ -7,25 +7,20 @@
 <link rel="stylesheet" href="styling/context.css">
 </head>
 <body>
-<p> Opacity rises per visitor currently on this page.
-    Hover around and enjoy while you're still here. </p>
+<p> Nothing here is visible until you come near it.
+<br>The more people share this space with you right now, the less anything stays hidden</p>
     <div class="caption" id="caption">–</div>
     <div id="status">connecting…</div>
 
 <script>
-    // ---- Configuration ---------------------------------------------
-    // Same backend used by the rest of the site. Replace with your
-    // actual Render service URL (wss://, not https://).
+    // ---- config ---------------------------------------------
     const WS_URL = 'wss://personal-bubble.onrender.com';
     // ------------------------------------------------------------------
 
     const captionEl = document.getElementById('caption');
     const statusEl = document.getElementById('status');
 
-    // One random ID per browser tab, shared with index.html via
-    // sessionStorage (this page runs same-origin, usually inside an
-    // iframe popup opened from index.html). Sharing the ID lets the
-    // server treat a tab plus its own popup(s) as a single visitor.
+
     function getSessionId() {
         let id = sessionStorage.getItem('presenceSessionId');
         if (!id) {
