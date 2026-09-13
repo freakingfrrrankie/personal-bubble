@@ -1,0 +1,104 @@
+.pop { border: 1px solid currentColor; padding: 0 .2em; cursor: pointer; white-space: nowrap; }
+.pop:hover { background: #f0f0f0; }
+
+html [data-v] { display: none; }
+html[data-v="a"] [data-v="a"] { display: revert; }
+html[data-v="b"] [data-v="b"] { display: revert; }
+
+.version-toggle {
+    position: fixed; top: 1rem; right: 1rem; z-index: 500;
+    display: flex; align-items: stretch;
+    border: 1px solid #999; border-radius: 999px;
+    overflow: hidden; background: var(--paper, #fff); font-size: .85rem;
+}
+.version-toggle button {
+    border: 0; background: none; padding: .5rem 1.1rem; cursor: pointer;
+    color: var(--ink-soft, #666); font: inherit;
+    border-left: 1px solid #ccc; /* divider — first button's is hidden below */
+}
+.version-toggle button:first-child { border-left: 0; }
+.version-toggle button.active { background: var(--ink, #111); color: var(--paper, #fff); }
+.version-toggle button:hover:not(.active) { color: var(--ink, #111); }
+
+.flow-views > [data-view] { display: none; }
+.flow-views[data-current-view="main"] > [data-view="main"],
+.flow-views[data-current-view="glossary"] > [data-view="glossary"],
+.flow-views[data-current-view="reference"] > [data-view="reference"] { display: revert; }
+
+/* .flow's own styling (uppercase, large clamp()'d font-size) is right
+   for the main flowing .ctx content but wrong for a read-as-prose list
+   like a glossary or reference — reset it here the same way .attention
+   already resets it for itself, so a non-main view is just legible body
+   text out of the box. Adjust freely to match your real stylesheet. */
+.flow-view[data-view="glossary"],
+.flow-view[data-view="reference"] {
+    text-transform: none; letter-spacing: normal;
+    font-size: 1rem; line-height: 1.6; max-width: 100vw;
+}
+.flow-view-note { color: var(--ink-soft, #666); font-style: italic; margin-bottom: 1rem; }
+
+/* The cluster is the whole popup + everything grown off it — the thing you drag. */
+.cluster {
+    position: fixed;
+    display: grid;
+    gap: 0;
+    filter: drop-shadow(0 12px 30px rgba(0, 0, 0, .22));
+}
+
+.popup-bar {
+    grid-column: 1; grid-row: 1;
+    display: flex; align-items: center; gap: .6rem;
+    padding: .45rem .5rem .45rem .7rem;
+    background: #f4f4f4;
+    border: 1px solid #ccc; border-bottom: 0;
+    cursor: grab; user-select: none;
+}
+.popup-bar.dragging { cursor: grabbing; }
+.popup-bar .grip { flex: 0 0 auto; letter-spacing: -2px; opacity: .5; font-size: .85em; }
+.popup-title {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-style: italic;
+}
+
+.panel { position: relative; border: 1px solid #ccc; background: #fff; overflow: visible; }
+/* Extra padding on all four sides reserves a blank gutter around the
+   iframe (which is sized to 100% of this padded box, so it never grows
+   into that gutter) — that's where the extend arrows sit: inside the
+   panel's border, but in a strip the loaded page's own content can never
+   reach, so they can't land on top of text. Top/bottom match each other
+   (up/down are the same rotated glyph, mirrored) and so do left/right. */
+.panel-body { box-sizing: border-box; height: 100%; overflow: auto; padding: 2.6rem 2.2rem 2.6rem 2.2rem; }
+.panel-body p { margin: 0 0 .9rem; }
+.panel iframe { width: 100%; height: 100%; border: 0; display: block; }
+.cluster.dragging iframe { pointer-events: none; } /* iframe would eat the mousemoves while dragging */
+
+.panel-close, .popup-close {
+    border: 0; background: none; font-size: 1rem; line-height: 1;
+    cursor: pointer; padding: .15rem .4rem; opacity: .7;
+}
+.panel-close { position: absolute; top: .3rem; right: .3rem; z-index: 2; }
+.panel-close:hover, .popup-close:hover { opacity: 1; }
+
+/* Extend arrows: a single glyph, rotated per direction — no box drawn
+   around it at all. Faded at rest, solid on hover. This is the exact
+   technique from the reference file (a plain '&rsaquo;' rotated 90deg),
+   which sidesteps the font-centering-in-a-box problem entirely by not
+   drawing a box in the first place. */
+.ext {
+    position: absolute; z-index: 2;
+    border: 0; background: none; cursor: pointer;
+    font-size: 1.6rem; line-height: 1; padding: .2rem .35rem;
+    opacity: .45; transition: opacity .15s;
+}
+.ext:hover { opacity: 1; }
+/* Sit inside the panel's border, tucked into the blank gutter that
+   .panel-body's extra padding reserves on that same edge (see above) —
+   never on the outer edge, never outside the box, and never over
+   content, because the iframe physically can't extend into that
+   gutter. Each pair is the same glyph, just mirrored: right/left share
+   a rotation axis (0deg / 180deg) and down/up share the other
+   (90deg / -90deg). */
+.ext-right { right: .3rem; top: 50%; transform: translateY(-50%); }
+.ext-left  { left: .3rem; top: 50%; transform: translateY(-50%) rotate(180deg); }
+.ext-down  { bottom: .3rem; left: 50%; transform: translateX(-50%) rotate(90deg); }
+.ext-up    { top: .3rem; left: 50%; transform: translateX(-50%) rotate(-90deg); }
