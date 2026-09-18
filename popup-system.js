@@ -1,142 +1,12 @@
-/*
- * Popup / extend-cluster system — grid-based.
- *
- * Ported from a reference prototype the project owner supplied (a
- * "frankie.html" cluster/panel skeleton), adapted to load real pages
- * rather than the reference's placeholder text.
- *
- * ARCHITECTURE: a cluster is a CSS Grid. Each panel occupies one
- * (col, row) cell, in a VIRTUAL coordinate space centred on the root
- * panel at (0, 0) — col grows right/shrinks left, row grows down/
- * shrinks up, so a cluster can extend in any of the four directions
- * from any panel, not just right/down from the root. Virtual coords can
- * go negative (growing left or up), but actual CSS grid lines can't —
- * and row 1 is always reserved for the single shared title bar, however
- * far the cluster has grown upward — so relayout() remaps virtual to
- * real grid lines every time it runs: it finds the current min column
- * and min row across every panel and offsets everything so the
- * leftmost column always lands on grid line 1 and the topmost content
- * row always lands on grid line 2 (line 1 stays the title bar). That
- * remapping is cheap and total, so it doesn't matter which direction —
- * or mix of directions — a cluster has grown in; relayout() turns each
- * panel's own desired size into grid tracks — a column is as wide as
- * its widest occupant, a row as tall as its tallest — so panels sharing
- * an edge stay flush without any manual pixel bookkeeping. A Set of
- * "col,row" strings (virtual coords, signed) tracks which cells are
- * taken, so two different branches can never claim the same cell (e.g.
- * a right-child's own up-extend and an up-child's own right-extend
- * would land on the same cell — whichever gets there first wins, the
- * other's arrow just doesn't appear for that cell).
- *
- * Wire-up: give any link the ".ctx" wrapper this page already uses
- * (`<span class="ctx"><a href="...">...</a></span>`), include this file
- * plus popup-system.css. No extra container element is needed — clusters
- * are appended straight to <body>.
- *
- * EXTENDING: a loaded page offers any of the four directions via up to
- * four optional <link> tags in its own <head> — any panel can offer
- * any combination, not just the root:
- *
- *   <link rel="next-right" href="extend-02.html">
- *   <link rel="next-down"  href="extend-01.html">
- *   <link rel="next-up"    href="extend-up.html">
- *   <link rel="next-left"  href="extend-left.html">
- *
- * The arrow for a direction only shows when the page declares it, the
- * target grid cell is free, and the cluster hasn't spent its PANEL_BUDGET
- * (how many extensions one cluster allows in total, see below). Closing
- * a panel removes it and everything grown off it, freeing those cells
- * back up — an ancestor's arrow reappears automatically since arrow
- * visibility is just recomputed from current occupancy each time.
- *
- * SIZING: measurePage() checks, in order: a `<meta name="popup-size"
- * content="WxH">` tag (author opts in to an exact size, scaled down to
- * fit the screen if needed); a page that's a single <img> (fits to that
- * image's natural size); otherwise a random size within a comfortable
- * text-reading range. This is a deliberate change from content-height
- * auto-measurement — it's what the reference file does, and it means a
- * page can pin its own size via the meta tag when it matters.
- *
- * HIGHLIGHTS: a phrase inside any loaded page can open an inline note
- * beside it, using a <span> (not a link) so it can sit inside a <p>:
- *
- *   <span class="expand" data-href="annotation-01.html">a data resource</span>
- *   <span class="expand" data-note="Some text right here.">another phrase</span>
- *
- * Clicking it fetches data-href (or uses data-note directly) and inserts
- * a floated note span right after the phrase — CSS float is what makes
- * the rest of the paragraph wrap around it, so it's genuinely "inside"
- * the text it came from, not a separately positioned box that might
- * spill past its container (no pixel math needed for this one at all).
- * Click again, or its own close button, to remove it. This lives
- * entirely inside the loaded page's own document — same-origin pages
- * get the notes' CSS and click-handling injected automatically once,
- * so content pages don't need to carry that styling themselves.
- *
- * VERSIONS (the site-wide toggle): any page — the landing page itself,
- * or a page loaded into a pop-up — can carry two variants of its text
- * and let one global switch pick which one shows, everywhere, live:
- *
- *   <meta name="title-a" content="Clinical title">
- *   <meta name="title-b" content="Poetic title">
- *   ...
- *   <div data-v="a">Clinical-register paragraph(s).</div>
- *   <div data-v="b">Poetic-register paragraph(s).</div>
- *
- * An element tagged data-v="a"/"b" only renders while the nearest <html>
- * carries the matching data-v attribute; that attribute is what the
- * toggle flips. It's set on the landing page's own document and, via the
- * same same-origin adoption this file already does for highlight CSS, on
- * every loaded content iframe too — so a page never has to wire this up
- * itself beyond marking its two variants. A highlight's data-note can
- * also be versioned (data-note-a / data-note-b, falling back to a plain
- * data-note if only one is given). Any button anywhere on the page with
- * a data-set-version="a"/"b" attribute becomes a toggle control for
- * free, the same delegated-click way .ctx links work — see
- * .version-toggle in popup-system.css for a ready-made one.
- *
- * Default version: same pattern as this project's own --paper/--ink
- * light/dark custom properties. Until someone actually clicks the
- * toggle, the version follows the OS's prefers-color-scheme live (dark
- * → poetic, light → clinical); the first click is remembered
- * (localStorage) as an explicit choice and wins over the system from
- * then on, on every later visit.
- *
- * POPPING OUT: a .ctx link works the same wherever it is, not just on
- * the landing page — one inside a loaded page's own content (its
- * ordinary paragraph text, or a fetched highlight note) opens as its
- * own new, independent, draggable pop-up too, instead of the browser's
- * default same-frame navigation. A plain <a> with no .ctx wrapper is
- * left alone and navigates in place as normal — .ctx is the opt-in.
- *
- * FLOW VIEWS (landing-page-only switcher, separate from the version
- * toggle above): wrap alternate landing-page sections in
- * <div class="flow-view" data-view="...">, all inside one
- * <div class="flow-views" data-current-view="...">, and give a button
- * data-set-view="..." to switch which one shows. Unlike data-set-version
- * this never touches an open pop-up's content — it only ever changes
- * what the landing page itself is showing in that one region. A button
- * can carry both data-set-view and data-set-version at once (see
- * homedemo.html's Proposition/Field Notes buttons) to mean "show the
- * main view, in this register" — Glossary/Reference carry only
- * data-set-view, so they leave the site-wide register untouched.
- */
-
 (function () {
   'use strict';
 
   var MIN_W = 240, MIN_H = 200;
-  var PANEL_BUDGET = 6; // how many extensions (any direction, combined) one cluster allows in total
-
-  // ---------- content versioning (the toggle) ----------
-
+  var PANEL_BUDGET = 6; 
   var VERSION_KEY = 'pb-version';
 
-  // Same "system default until the visitor explicitly overrides it"
-  // pattern as --paper/--ink already use for light/dark: no explicit
-  // choice yet → follow prefers-color-scheme (dark → poetic, light →
-  // clinical); once the toggle is clicked once, that choice is explicit
-  // and sticks regardless of what the system does afterwards.
+  // system default until the visitor explicitly overrides it
+
   function systemPrefersDark() {
     try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
     catch (err) { return false; }
@@ -145,48 +15,32 @@
   function storedVersion() {
     try {
       var v = localStorage.getItem(VERSION_KEY);
-      return (v === 'a' || v === 'b') ? v : null; // null = no explicit choice yet
-    } catch (err) { return null; } // localStorage can throw (privacy mode etc.)
+      return (v === 'a' || v === 'b') ? v : null; // no explicit choice yet
+    } catch (err) { return null; } 
   }
 
   var VERSION_EXPLICIT = storedVersion() !== null;
   var CURRENT_VERSION = storedVersion() || (systemPrefersDark() ? 'b' : 'a');
 
-  // Sets the data-v attribute a page's own CSS keys off of, and — for a
-  // loaded content page, not the landing page itself — swaps its <title>
-  // from the matching <meta name="title-a/b">, so the pop-up bar and the
-  // browser tab (were this page opened directly) both stay in sync.
+
+  // Versions switching <meta name="title-a/b">
   function applyVersion(doc, isContentFrame) {
     if (!doc || !doc.documentElement) return;
     doc.documentElement.setAttribute('data-v', CURRENT_VERSION);
     if (isContentFrame) {
       var meta = doc.querySelector('meta[name="title-' + CURRENT_VERSION + '"]');
       if (meta) doc.title = meta.content;
-      refreshOpenNotes(doc); // any highlight note already open re-fetches in the new version
+      refreshOpenNotes(doc); 
     }
   }
 
-  // A highlight note that's already open when the toggle flips would
-  // otherwise keep showing whichever version it was opened in — refetch
-  // (or re-read data-note) for every currently-open TOP-LEVEL one so it
-  // catches up (a note nested inside another open note is handled as
-  // part of its parent's refresh, below, since replacing the parent's
-  // content would otherwise silently destroy it).
+  // A highlight note 
   function refreshOpenNotes(doc) {
     var opens = Array.prototype.slice.call(doc.querySelectorAll('.expand.open'));
     opens.filter(function (t) { return !t.closest('.inline-box'); })
          .forEach(refreshOneNote);
   }
 
-  // Replacing a note's body wholesale (fresh HTML for the new version)
-  // would otherwise discard any nested note the visitor had drilled into
-  // inside it — remember which of THIS note's own .expand children were
-  // open by position, then re-click the equivalent ones in the fresh
-  // content once it's in. That re-click goes through the normal
-  // delegated handler, so it recurses into any further nesting on its
-  // own (one level of nested-inside-nested state is preserved this way;
-  // deeper than that just reopens fresh, which is a fine trade-off for
-  // how rare it'd be).
   function refreshOneNote(trigger) {
     var box = trigger._box;
     if (!box) return;
@@ -205,11 +59,8 @@
     });
   }
 
-  // A button's "active" state can depend on the version, the flow view,
-  // or (for a combined button like Proposition/Field Notes) both at
-  // once — active only when every attribute it carries matches current
-  // state, so a view-only button (Glossary/Reference) never lights up
-  // just because its unrelated register happens to match, and vice versa.
+  // Active buttons toggle
+  
   function refreshToggleButtons() {
     var currentView = currentFlowView();
     document.querySelectorAll('[data-set-version], [data-set-view]').forEach(function (btn) {
@@ -222,7 +73,7 @@
     });
   }
 
-  // ---------- flow views (landing-page-only, separate from the version toggle) ----------
+  // Flow views for Glossary and Reference: diff from toggle
 
   function currentFlowView() {
     var wrap = document.querySelector('.flow-views');
@@ -236,11 +87,7 @@
     refreshToggleButtons();
   }
 
-  // Re-applies CURRENT_VERSION to every open surface at once: the
-  // landing page, every loaded pop-up (root and every extended panel),
-  // each pop-up's title bar, and any highlight note currently open.
-  // Nothing has to be reloaded — shared by an explicit toggle click and
-  // by the system theme listener below.
+
   function refreshAllSurfaces() {
     applyVersion(document, false);
     refreshToggleButtons();
@@ -261,8 +108,7 @@
     });
   }
 
-  // Called only from an explicit toggle click — this is what makes the
-  // choice "explicit" from now on, so the system listener below backs off.
+  // Only from an explicit toggle click 
   function setVersion(v) {
     if (v !== 'a' && v !== 'b') return;
     CURRENT_VERSION = v;
@@ -271,9 +117,7 @@
     refreshAllSurfaces();
   }
 
-  // Live: if the visitor's OS theme changes while the page is open and
-  // they've never clicked the toggle themselves, follow it — same as the
-  // --paper/--ink custom properties already do via the CSS media query.
+
   try {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
       if (VERSION_EXPLICIT) return; // an explicit choice always wins over the system
@@ -282,10 +126,7 @@
     });
   } catch (err) { /* matchMedia/addEventListener unsupported — initial system default still applies */ }
 
-  // A .ctx link's fallback title (shown until the loaded page's own
-  // title resolves) should reflect whichever version is active — plain
-  // link.textContent would run both versions together, since CSS
-  // display:none doesn't remove text from it.
+  // A .ctx link's fallback title 
   function linkLabel(link) {
     var active = link.querySelector('[data-v="' + CURRENT_VERSION + '"]');
     return (active ? active.textContent : link.textContent).trim();
@@ -302,9 +143,9 @@
     return { w: Math.round(w * s), h: Math.round(h * s) };
   }
 
-  // How big does a loaded page want its panel to be?
-  //   1. the page says so:  <meta name="popup-size" content="520x680">
-  //   2. the page is one image: fit the image's natural size
+  // Panel size
+  //   1. <meta name="popup-size" content="www x hhh">
+  //   2. image only: fit the image's natural size
   //   3. otherwise: a random text size
   function measurePage(frame) {
     var doc;
@@ -358,18 +199,13 @@
     '.inline-close { position: absolute; top: .2rem; right: .35rem; border: 0; background: none; font: inherit; line-height: 1; cursor: pointer; opacity: .7; }' +
     '.inline-close:hover { opacity: 1; }';
 
-  // Same rule content pages get from popup-system.css on the landing
-  // page, injected here since a loaded content page doesn't link that
-  // stylesheet itself.
+  // popup-system.css on the landing in case shit happens
   var VERSION_CSS =
     'html [data-v] { display: none; }' + // descendant combinator, not bare [data-v] — see popup-system.css
     'html[data-v="a"] [data-v="a"] { display: revert; }' +
     'html[data-v="b"] [data-v="b"] { display: revert; }';
 
-  // Minimal link styling for a .ctx a found inside loaded content — just
-  // enough to mark "this pops out", not the landing page's ambient-
-  // opacity behavior (that's a visitor-count effect specific to the
-  // landing page itself, and wouldn't make sense inside a pop-up).
+  // Minimal link styling for a .ctx a found inside loaded content
   var CTX_CSS =
     '.ctx a { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }' +
     '.ctx a:hover { text-decoration-style: solid; }';
@@ -380,9 +216,7 @@
     box.remove();
   }
 
-  // Content for a note: a version-specific data-note-a/data-note-b if
-  // given, else a plain data-note (inline text, no fetch either way);
-  // otherwise fetch data-href and use that page's <body>.
+  // Content for a note: in case
   function noteContent(trigger, done) {
     var versioned = trigger.dataset['note' + (CURRENT_VERSION === 'b' ? 'B' : 'A')];
     if (versioned) {
@@ -393,15 +227,10 @@
       done('<span class="para">' + trigger.dataset.note + '</span>');
       return;
     }
-    // Same version-specific-first-then-plain pattern for the fetched
-    // case: data-href-a/data-href-b let the two versions point at
-    // entirely different annotation files, not just different text.
+
     var href = trigger.dataset['href' + (CURRENT_VERSION === 'b' ? 'B' : 'A')] || trigger.dataset.href;
     if (href) {
-      // data-* attributes have no resolved-URL property like <a>.href or
-      // <link>.href, so a relative path here must be resolved by hand —
-      // against the trigger's OWN document (trigger.baseURI), not the
-      // top page fetch() would otherwise resolve it against.
+
       var resolved = new URL(href, trigger.baseURI).href;
       fetch(resolved)
         .then(function (res) { return res.text(); })
@@ -415,10 +244,7 @@
     done('<span class="para">(no content declared for this highlight)</span>');
   }
 
-  // Opens a .ctx link as its own new pop-up cluster — used identically
-  // whether the link is on the landing page or inside any loaded page's
-  // content (a highlight note's fetched HTML included, since that's
-  // just more DOM in an already-adopted document).
+  // Open .ctx link as its own new pop-up cluster
   function openFromCtxLink(link) {
     openCluster(link.href, linkLabel(link));
   }
@@ -431,8 +257,7 @@
       openFromCtxLink(link);
     });
   }
-  // the resolved URL (openCluster loads it into a new iframe by URL),
-  // not fetched HTML.
+  // the resolved URL (openCluster loads into a new iframe), not fetch html
   function hrefForVersion(trigger) {
     var href = trigger.dataset['href' + (CURRENT_VERSION === 'b' ? 'B' : 'A')] || trigger.dataset.href;
     return href ? new URL(href, trigger.baseURI).href : null;
@@ -475,10 +300,9 @@
     });
   }
 
-  // Context pages are same-origin iframes, so style + wire them from
-  // here instead of repeating EXPAND_CSS/wireExpanders in every one.
+
   function adoptFrame(doc) {
-    applyVersion(doc, true); // every (re)load reflects whichever version is currently active
+    applyVersion(doc, true); 
     if (doc._expandersAdopted) return;
     doc._expandersAdopted = true;
     var s = doc.createElement('style');
@@ -491,16 +315,7 @@
 
   // ---------- grid relayout ----------
 
-  // Virtual (col, row) — signed, root is (0, 0) — get remapped to real
-  // (always-positive) CSS grid lines here, from scratch, every time this
-  // runs: colOffset/rowOffset shift so the current leftmost column sits
-  // on line 1 and the current topmost content row sits on line 2 (line 1
-  // is permanently the title bar). Recomputing the offset on every call
-  // rather than mutating stored coordinates is what lets a cluster grow
-  // left or up after the fact without renumbering anything by hand —
-  // extend() only ever adds ±1 to a panel's own virtual coordinate, and
-  // this is the one place that turns the whole tree's current shape into
-  // actual grid positions.
+
   function relayout(cluster) {
     var panels = Array.prototype.slice.call(cluster.querySelectorAll('.panel'));
     if (!panels.length) return;
@@ -531,9 +346,6 @@
 
   // ---------- panels ----------
 
-  // col/row are VIRTUAL coordinates (may be negative) — relayout() is
-  // what turns them into real grid-column/grid-row values, so this
-  // function doesn't need to touch that CSS itself at all.
   function makePanel(cluster, col, row, opts) {
     opts = opts || {};
     var panel = document.createElement('section');
@@ -591,9 +403,7 @@
       refreshArrows(cluster);
       clampIntoView(cluster);
     });
-    // Append INTO .panel-body (don't replace it) — its padding is what
-    // reserves the blank gutter the extend arrows live in, so the iframe
-    // needs to stay nested inside that padded box, not take its place.
+
     panel.querySelector('.panel-body').appendChild(frame);
     frame.src = url;
     return frame;
@@ -602,7 +412,7 @@
   function extend(cluster, from, dCol, dRow, href) {
     if (!href) return; // this direction has nothing declared
     var col = from._col + dCol, row = from._row + dRow;
-    if (cluster._cells.has(col + ',' + row)) return; // another branch already owns this cell
+    if (cluster._cells.has(col + ',' + row)) return; 
     if (cluster._spent >= PANEL_BUDGET) return;
 
     var panel = makePanel(cluster, col, row);
@@ -628,8 +438,7 @@
     refreshArrows(cluster);
   }
 
-  // An arrow shows only if that direction was declared, its cell is
-  // free, AND there's still budget left.
+  // there's still budget left.
   function refreshArrows(cluster) {
     var budgetLeft = cluster._spent < PANEL_BUDGET;
     cluster.querySelectorAll('.panel').forEach(function (p) {
@@ -670,7 +479,7 @@
       var box = cluster.getBoundingClientRect();
       var dx = e.clientX - box.left, dy = e.clientY - box.top;
 
-      bar.setPointerCapture(e.pointerId); // keeps events coming even over the iframe
+      bar.setPointerCapture(e.pointerId);
       cluster.classList.add('dragging');
       bar.classList.add('dragging');
 
@@ -707,7 +516,7 @@
     var label = cluster.querySelector('.popup-title');
     label.textContent = fallbackTitle; // shown until the page loads
 
-    var root = makePanel(cluster, 0, 0, { root: true }); // virtual origin — relayout() maps this to grid line (1, 2)
+    var root = makePanel(cluster, 0, 0, { root: true }); // virtual origin 
     loadPanel(cluster, root, url, {
       fallbackTitle: fallbackTitle,
       onTitle: function (t) { label.textContent = t; }
@@ -733,8 +542,7 @@
     }
     var popTrigger = e.target.closest('.pop');
     if (popTrigger) { openFromPopTrigger(popTrigger); return; }
-    // Independent, not else-if: a combined button (data-set-version AND
-    // data-set-view, e.g. "Field Notes") needs both actions to fire.
+
     var versionBtn = e.target.closest('[data-set-version]');
     if (versionBtn) setVersion(versionBtn.getAttribute('data-set-version'));
     var viewBtn = e.target.closest('[data-set-view]');
@@ -745,9 +553,7 @@
     document.querySelectorAll('.cluster').forEach(clampIntoView);
   });
 
-  // Landing page itself gets the current version applied on load, same
-  // as every content iframe does when adopted; the toggle (if the page
-  // has one) starts in sync with whatever was last chosen.
+
   applyVersion(document, false);
   refreshToggleButtons();
 })();
