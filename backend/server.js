@@ -6,7 +6,7 @@ const WebSocket = require('ws');
 const PORT = process.env.PORT || 3000;
 const HEARTBEAT_INTERVAL_MS = 30000; // how often we check for dead connections
 
-// A plain HTTP server so the host has something to health-check
+//health-check
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Presence WebSocket server is running.\n');
@@ -34,11 +34,11 @@ function getSid(req) {
   try {
     const { searchParams } = new URL(req.url, 'http://placeholder');
     const sid = searchParams.get('sid');
-    if (sid) return sid.slice(0, 100); // basic length guard
+    if (sid) return sid.slice(0, 100); 
   } catch (err) {
-    // fall through to the anonymous fallback below
+    // anonymous fallback below
   }
-  // uncoordinated visitor rather than crashing.
+  // uncoordinated visitor 
   return `anon-${Math.random().toString(36).slice(2)}`;
 }
 
@@ -56,7 +56,7 @@ wss.on('connection', (ws, req) => {
     ws.isAlive = true;
   });
 
-  // A new tab (or its first connection) joined -> broadcast the new count.
+  // NEW COUNT
   broadcastCount();
 
   ws.on('close', () => {
@@ -72,16 +72,16 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('error', () => {
-    // Let 'close' handle the broadcast; just avoid an unhandled error crash.
+    // avoid an unhandled error crash.
   });
 });
 
-// ping/pong check finds and drops
-// connections that have gone silent, so the count stays accurate.
+// pingpong check finds and drops
+
 const heartbeat = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (ws.isAlive === false) {
-      return ws.terminate(); // triggers 'close' above, which re-broadcasts
+      return ws.terminate(); // triggers 'close' 
     }
     ws.isAlive = false;
     ws.ping();
