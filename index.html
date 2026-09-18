@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="keywords" content="Personal Bubble, Personal Space, Internet of Things, Orgware">
     <meta name="author" content="Frankie Anh Le">
-    <meta name="description" content="Personal Bubble — a hybrid spatial condition situated in the blurred territory between physical and digital realms. Personal Bubble is not a fixed container, but something continuously produced through entangled relations between bodies, technologies, and their traces.">
+    <meta name="description" content="Personal Bubble — a hybrid spatial condition situated in the blurred territory between physical and digital realms. 
+        Personal Bubble is not a fixed container, but something continuously produced through entangled relations between bodies, technologies, and their traces.
+        Website is hand-woven by freakingFrrrankie.">
     <title>Personal Bubble</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -213,9 +215,9 @@
 <script>
     const WS_URL = 'wss://personal-bubble.onrender.com';
 
-    // One random ID per browser tab, shared with any same-origin popup
-    // (attention.html) via sessionStorage, so the server can tell that a
-    // tab plus its own popups are one visitor, not several.
+    try {
+    fetch(WS_URL.replace(/^wss:/, 'https:'), { mode: 'no-cors' }).catch(() => {});
+    } catch (err) { /* best-effort */ }
     function getSessionId() {
         let id = sessionStorage.getItem('presenceSessionId');
         if (!id) {
@@ -225,14 +227,13 @@
         return id;
     }
 
-    let reconnectDelay = 1000;
+    let reconnectDelay = 500;
     let socket;
 
     const ctxSpans = Array.from(document.querySelectorAll('.ctx'));
 
-    // One cache of per-visitor random contributions (0-10) per link,
-    // filled in lazily and reused so the same count always reproduces the
-    // same opacities.
+    // One cache of per-visitor random contributions per link
+    // filled in lazily 
     const spanStepCache = ctxSpans.map(() => []);
 
     function stepFor(spanIndex, step) {
@@ -278,7 +279,7 @@
         socket = new WebSocket(`${WS_URL}?sid=${encodeURIComponent(getSessionId())}`);
 
         socket.addEventListener('open', () => {
-            reconnectDelay = 1000;
+            reconnectDelay = 500;
         });
 
         socket.addEventListener('message', (event) => {
@@ -296,7 +297,7 @@
 
         socket.addEventListener('close', () => {
             setTimeout(connectPresence, reconnectDelay);
-            reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+            reconnectDelay = Math.min(reconnectDelay * 1.4, 5000);
         });
 
         socket.addEventListener('error', () => {
