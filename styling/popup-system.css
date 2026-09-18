@@ -57,7 +57,7 @@ html[data-v="b"] [data-v="b"] { display: revert; }
 }
 
 .panel { position: relative; border: 1px solid #ccc; background: #fff; overflow: visible; }
-.panel-body { box-sizing: border-box; height: 100%; overflow: auto; padding: 1.5rem 1rem 1.5rem 1rem; }
+.panel-body { box-sizing: border-box; height: 100%; overflow: auto; padding: 1.5rem 1.5rem 1.5rem 1.5rem; }
 .panel-body p { margin: 0 0 .9rem; }
 .panel iframe { width: 100%; height: 100%; border: 0; display: block; }
 .cluster.dragging iframe { pointer-events: none; } /* iframe eats the mousemoves while dragging */
